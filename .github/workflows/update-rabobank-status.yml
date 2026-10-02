@@ -18,9 +18,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Repository ophalen
       - name: Repository ophalen
         uses: actions/checkout@v4
 
+      # 2. Zoek het nieuwste open issue dat Power Automate heeft aangemaakt
       - name: Nieuwste HTML-overdrachtsissue zoeken
         id: transfer
         env:
@@ -40,8 +42,10 @@ jobs:
             exit 1
           fi
 
+          echo "Gevonden issue: #$issue_number"
           echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
 
+      # 3. HTML uit de body van het issue halen
       - name: HTML uit issue ophalen
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,6 +58,7 @@ jobs:
             --json body \
             --jq '.body' > docs/index.html
 
+      # 4. Controleren of daadwerkelijk HTML ontvangen is
       - name: HTML controleren
         run: |
           if [ ! -s docs/index.html ]; then
@@ -66,12 +71,21 @@ jobs:
             exit 1
           fi
 
+          echo "HTML succesvol gecontroleerd."
+
+      # 5. Jekyll expliciet uitschakelen
+      - name: Jekyll uitschakelen
+        run: |
+          touch docs/.nojekyll
+          echo "docs/.nojekyll aangemaakt."
+
+      # 6. HTML en .nojekyll naar repository schrijven
       - name: HTML publiceren
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add docs/index.html
+          git add docs/index.html docs/.nojekyll
 
           if git diff --cached --quiet; then
             echo "De HTML is niet gewijzigd."
@@ -80,6 +94,7 @@ jobs:
             git push
           fi
 
+      # 7. Issue pas sluiten als alle voorgaande stappen succesvol zijn
       - name: Overdrachtsissue sluiten
         if: success()
         env:
