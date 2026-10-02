@@ -1,0 +1,91 @@
+name: Update Rabobank status page
+
+on:
+  repository_dispatch:
+    types:
+      - update-rabobank-status
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: update-rabobank-status
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@v4
+
+      - name: Nieuwste HTML-overdrachtsissue zoeken
+        id: transfer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue_number="$(
+            gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --search "POWER-AUTOMATE-HTML in:title" \
+              --json number,title,createdAt \
+              --jq 'sort_by(.createdAt) | reverse | .[0].number'
+          )"
+
+          if [ -z "$issue_number" ] || [ "$issue_number" = "null" ]; then
+            echo "Geen open HTML-overdrachtsissue gevonden."
+            exit 1
+          fi
+
+          echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
+
+      - name: HTML uit issue ophalen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.transfer.outputs.issue_number }}
+        run: |
+          mkdir -p docs
+
+          gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body \
+            --jq '.body' > docs/index.html
+
+      - name: HTML controleren
+        run: |
+          if [ ! -s docs/index.html ]; then
+            echo "docs/index.html is leeg."
+            exit 1
+          fi
+
+          if ! grep -qi "<html" docs/index.html; then
+            echo "De ontvangen inhoud lijkt geen volledige HTML-pagina."
+            exit 1
+          fi
+
+      - name: HTML publiceren
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add docs/index.html
+
+          if git diff --cached --quiet; then
+            echo "De HTML is niet gewijzigd."
+          else
+            git commit -m "Update Rabobank API status page"
+            git push
+          fi
+
+      - name: Overdrachtsissue sluiten
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.transfer.outputs.issue_number }}
+        run: |
+          gh issue close "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --comment "HTML is verwerkt en gepubliceerd naar docs/index.html."
