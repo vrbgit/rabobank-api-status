@@ -5,6 +5,8 @@ on:
     types:
       - update-rabobank-status
 
+  workflow_dispatch:
+
 permissions:
   contents: write
   issues: write
