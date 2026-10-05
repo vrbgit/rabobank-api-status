@@ -47,7 +47,7 @@ jobs:
           echo "Gevonden issue: #$issue_number"
           echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
 
-      # 3. HTML uit de body van het issue halen
+      # 3. HTML uit de body van het issue halen en decoderen
       - name: HTML uit issue ophalen
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,7 +58,26 @@ jobs:
           gh issue view "$ISSUE_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
             --json body \
-            --jq '.body' > docs/index.html
+            --jq '.body' > docs/raw.html
+
+          python3 - <<'PY'
+          import html
+          from pathlib import Path
+
+          raw = Path("docs/raw.html").read_text(encoding="utf-8")
+
+          # De <br>-tags zijn door de GitHub Issue-weergave
+          # in de inhoud terechtgekomen.
+          raw = raw.replace("<br><br>", "\n")
+          raw = raw.replace("<br>", "\n")
+
+          # &lt;div&gt; enz. terugzetten naar echte HTML
+          decoded = html.unescape(raw)
+
+          Path("docs/index.html").write_text(decoded, encoding="utf-8")
+          PY
+
+          rm docs/raw.html
 
       # 4. Controleren of daadwerkelijk HTML ontvangen is
       - name: HTML controleren
@@ -69,8 +88,6 @@ jobs:
             echo "FOUT: docs/index.html bestaat niet."
             exit 1
           fi
-
-          echo "Bestand bestaat."
 
           if [ ! -s docs/index.html ]; then
             echo "FOUT: docs/index.html is leeg."
@@ -83,13 +100,13 @@ jobs:
           echo "Eerste 20 regels:"
           head -n 20 docs/index.html
 
-          if ! grep -qi "<html" docs/index.html; then
-            echo "FOUT: De ontvangen inhoud bevat geen <html>-element."
-            echo "Hierboven staat de daadwerkelijk ontvangen inhoud."
+          if ! grep -qi "<div" docs/index.html; then
+            echo "FOUT: Er is geen HTML-inhoud gevonden."
             exit 1
           fi
 
           echo "HTML succesvol gecontroleerd."
+          
       # 5. Jekyll expliciet uitschakelen
       - name: Jekyll uitschakelen
         run: |
