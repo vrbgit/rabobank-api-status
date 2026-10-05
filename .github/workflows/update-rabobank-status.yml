@@ -61,18 +61,33 @@ jobs:
       # 4. Controleren of daadwerkelijk HTML ontvangen is
       - name: HTML controleren
         run: |
-          if [ ! -s docs/index.html ]; then
-            echo "docs/index.html is leeg."
+          echo "=== HTML controle gestart ==="
+
+          if [ ! -f docs/index.html ]; then
+            echo "FOUT: docs/index.html bestaat niet."
             exit 1
           fi
 
+          echo "Bestand bestaat."
+
+          if [ ! -s docs/index.html ]; then
+            echo "FOUT: docs/index.html is leeg."
+            exit 1
+          fi
+
+          echo "Bestandsgrootte:"
+          wc -c docs/index.html
+
+          echo "Eerste 20 regels:"
+          head -n 20 docs/index.html
+
           if ! grep -qi "<html" docs/index.html; then
-            echo "De ontvangen inhoud lijkt geen volledige HTML-pagina."
+            echo "FOUT: De ontvangen inhoud bevat geen <html>-element."
+            echo "Hierboven staat de daadwerkelijk ontvangen inhoud."
             exit 1
           fi
 
           echo "HTML succesvol gecontroleerd."
-
       # 5. Jekyll expliciet uitschakelen
       - name: Jekyll uitschakelen
         run: |
